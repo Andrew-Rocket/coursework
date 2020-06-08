@@ -1,0 +1,2 @@
+E:\Code\cardb\cardb\Debug\cardb.exe
+E:\Code\cardb\cardb\Debug\cardb.pdb

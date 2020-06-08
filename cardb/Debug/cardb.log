@@ -1,0 +1,20 @@
+﻿  cardb.cpp
+E:\Code\cardb\cardb\engine\entities\Receipt.h(55,15): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+E:\Code\cardb\cardb\engine\repos\CrudRepository.h(69,2): warning C4018: '<': signed/unsigned mismatch
+E:\Code\cardb\cardb\engine\repos\CrudRepository.h(68): message : while compiling class template member function 'bool CrudRepository<User>::updateById(int,T *)'
+          with
+          [
+              T=User
+          ]
+E:\Code\cardb\cardb\engine\services\UserService.h(52): message : see reference to function template instantiation 'bool CrudRepository<User>::updateById(int,T *)' being compiled
+          with
+          [
+              T=User
+          ]
+E:\Code\cardb\cardb\engine\repos\UserRepository.h(6): message : see reference to class template instantiation 'CrudRepository<User>' being compiled
+E:\Code\cardb\cardb\engine\repos\CrudRepository.h(55,2): warning C4018: '<': signed/unsigned mismatch
+E:\Code\cardb\cardb\engine\repos\CrudRepository.h(54): message : while compiling class template member function 'bool CrudRepository<Car>::deleteById(int)'
+E:\Code\cardb\cardb\engine\services\CarService.h(32): message : see reference to function template instantiation 'bool CrudRepository<Car>::deleteById(int)' being compiled
+E:\Code\cardb\cardb\engine\services\CarService.h(240): warning C4715: 'CarService::filter': not all control paths return a value
+E:\Code\cardb\cardb\engine\services\CarService.h(201): warning C4715: 'CarService::filter': not all control paths return a value
+  cardb.vcxproj -> E:\Code\cardb\cardb\Debug\cardb.exe
