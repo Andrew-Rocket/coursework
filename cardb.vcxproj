@@ -145,8 +145,17 @@
     <ClInclude Include="engine\abstract\Serializable.h" />
     <ClInclude Include="engine\Application.h" />
     <ClInclude Include="engine\console\commands\admin\CreateCarCommand.h" />
+    <ClInclude Include="engine\console\commands\admin\DeleteCarCommand.h" />
+    <ClInclude Include="engine\console\commands\admin\ReceiptsCommand.h" />
+    <ClInclude Include="engine\console\commands\admin\UpdateCarCommand.h" />
+    <ClInclude Include="engine\console\commands\admin\UsersCommand.h" />
     <ClInclude Include="engine\console\commands\base\AllCommand.h" />
+    <ClInclude Include="engine\console\commands\base\BuyCommand.h" />
     <ClInclude Include="engine\console\commands\base\SortCommand.h" />
+    <ClInclude Include="engine\console\views\HelpView.h" />
+    <ClInclude Include="engine\console\views\ReceiptView.h" />
+    <ClInclude Include="engine\console\views\UsersView.h" />
+    <ClInclude Include="engine\entities\Receipt.h" />
     <ClInclude Include="engine\enums\CarProperties.h" />
     <ClInclude Include="engine\console\commands\base\BalanceCommand.h" />
     <ClInclude Include="engine\console\commands\base\ChangePassComand.h" />
@@ -164,11 +173,20 @@
     <ClInclude Include="engine\exceptions\StringToBoolCastException.h" />
     <ClInclude Include="engine\repos\CarRepository.h" />
     <ClInclude Include="engine\repos\CrudRepository.h" />
+    <ClInclude Include="engine\repos\ReceiptRepository.h" />
     <ClInclude Include="engine\repos\UserRepository.h" />
     <ClInclude Include="engine\services\CarService.h" />
     <ClInclude Include="engine\services\CommandService.h" />
+    <ClInclude Include="engine\services\ReceiptService.h" />
     <ClInclude Include="engine\services\UserService.h" />
     <ClInclude Include="engine\utils\Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ClassDiagram.cd" />
+    <None Include="ClassDiagram1.cd" />
+    <None Include="ClassDiagram2.cd" />
+    <None Include="ClassDiagram3.cd" />
+    <None Include="ClassDiagram4.cd" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

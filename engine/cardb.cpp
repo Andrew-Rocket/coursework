@@ -1,10 +1,6 @@
 ﻿#include <iostream>
-
-
-
 #include "Application.h"
 #include "Auth.h"
-#include "repos/CrudRepository.h"
 
 int main()
 {

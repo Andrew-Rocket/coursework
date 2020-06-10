@@ -19,5 +19,7 @@ public:
 	void execute(vector<string> args, User* user) override
 	{
 		cout << "Balance: $" << user->getBalance() << "." << endl;
+		//Dellete car
+
 	}
 };

@@ -1,0 +1,2273 @@
+// engine/cardb.cpp
+﻿#include <iostream>
+#include "Application.h"
+#include "Auth.h"
+
+int main()
+{
+	try
+	{
+		Auth* auth = new Auth();
+		Application* app = new Application(auth);
+		app->start();
+
+	}
+	catch (exception e)
+	{
+		return EXIT_FAILURE;
+	}
+}
+
+
+// engine/abstract/Serializable.h
+﻿#pragma once
+#include <iosfwd>
+#include <ostream>
+
+class Serializable
+{
+protected:
+	virtual ~Serializable() = default;
+
+public:
+
+	virtual void serialize(std::ostream& os) = 0;
+	virtual void deserialize(std::istream& is) = 0;
+	//virtual auto serialized_size() const noexcept -> std::size_t = 0;
+
+	virtual int getId() = 0;
+};
+
+
+// engine/Application.h
+﻿#pragma once
+#include "entities/User.h"
+#include "repos/CarRepository.h"
+#include "Auth.h"
+#include "console/views/ProductsView.h"
+#include "console/views/WelcomeView.h"
+#include "repos/ReceiptRepository.h"
+#include "services/CommandService.h"
+
+class Application
+{
+private:
+	User* user;
+	Auth* auth;
+
+	CarRepository* cars = new CarRepository("cars");
+	ReceiptRepository* receipts = new ReceiptRepository("receipts");
+
+	CarService* carService = new CarService(cars);
+	ReceiptService* receiptService = new ReceiptService(receipts);
+
+	CommandsBuilder* cmdBuilder = new CommandsBuilder(auth->getUserService(), carService, receiptService);
+	CommandService* cmdService;
+
+	View* welcomeView;
+	View* productsView;
+
+public:
+
+
+	explicit Application(Auth* auth)
+		: auth(auth)
+	{
+	}
+
+	void start()
+	{
+		setEncodings();
+		try {
+			while (true) {
+
+				user = auth->makeAuth();
+
+				if (user == nullptr)
+				{
+					throw exception("Error, no user");
+				}
+
+				system("CLS");
+
+				welcomeView = new WelcomeView(user);
+				welcomeView->display();
+
+				/*productsView = new ProductsView(user, carService);
+				productsView->display();*/
+
+
+				cmdService = new CommandService(cmdBuilder->build());
+				cmdService->start(user);
+			}
+		}
+		catch (exception e)
+		{
+			auth->getUserService()->saveAll();
+			carService->saveAll();
+			receiptService->saveAll();
+		}
+	}
+
+
+	void setEncodings()
+	{
+		SetConsoleCP(CP_UTF8);
+		SetConsoleOutputCP(CP_UTF8);
+		setvbuf(stdout, nullptr, _IOFBF, 1000);
+	}
+
+};
+
+
+// engine/Auth.h
+﻿#pragma once
+#include "services/UserService.h"
+#include <clocale>
+#include <windows.h>
+#include <iostream>
+#include "console/ConsoleAuth.h"
+
+
+class Auth
+{
+private:
+
+	ConsoleAuth* consoleAuth;
+	UserService* userService;
+	UserRepository* userRepository;
+
+public:
+
+
+	Auth()
+	{
+		userRepository = new UserRepository("users");
+		userService = new UserService(userRepository);
+		consoleAuth = new ConsoleAuth(userService);
+	}
+
+	User* makeAuth()
+	{
+		return consoleAuth->start();
+	}
+
+
+	UserRepository* getUserRepository() const
+	{
+		return userRepository;
+	}
+
+
+	UserService* getUserService() const
+	{
+		return userService;
+	}
+
+
+};
+
+
+// engine/cardb.cpp
+﻿#include <iostream>
+
+
+
+#include "Application.h"
+#include "Auth.h"
+#include "repos/CrudRepository.h"
+
+int main()
+{
+	try
+	{
+		Auth* auth = new Auth();
+		Application* app = new Application(auth);
+		app->start();
+
+	}
+	catch (exception e)
+	{
+		return EXIT_FAILURE;
+	}
+}
+
+
+// engine/console/commands/admin/CreateCarCommand.h
+﻿#pragma once
+#include <iostream>
+#include "../Command.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+
+using namespace std;
+
+class CreateCarCommand : public Command
+{
+	CarService* carService;
+public:
+
+	CreateCarCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "createcar";
+		description = "*createcar {brand} {model} {year} {color} {isElectric(true/false)} {maxSpeed} {baseCost} {price} - add new car to db";
+		admin = true;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+
+		if (carService->createAndSave(args.at(1), args.at(2), stoi(args.at(3)),
+			args.at(4), Utils::stringToBool(args.at(5)),
+			stoi(args.at(6)), stod(args.at(7)), stod(args.at(8))))
+		{
+			cout << "Car successfully created" << endl;
+		}
+		else
+		{
+			cout << "Error, bad credentials" << endl;
+		}
+
+
+	}
+};
+
+
+// engine/console/commands/admin/DeleteCarCommand.h
+﻿#pragma once
+#include <iostream>
+#include "../Command.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+
+using namespace std;
+
+class DeleteCarCommand : public Command
+{
+	CarService* carService;
+public:
+
+	DeleteCarCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "deletecar";
+		description = "*deletecar {id} - delete car by id";
+		admin = true;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		int id = stoi(args.at(1));
+		if (carService->deleteCarById(id))
+		{
+			cout << "Car successfully deleted" << endl;
+		}
+		else
+		{
+			cout << "Error, wrong id" << endl;
+		}
+
+
+	}
+};
+
+
+// engine/console/commands/admin/ReceiptsCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+#include "../Command.h"
+#include "../../../entities/User.h"
+#include "../../../services/ReceiptService.h"
+#include "../../views/ReceiptView.h"
+#include "../../views/View.h"
+
+using namespace std;
+
+class ReceiptsCommand : public Command
+{
+private:
+	ReceiptService* receiptService;
+	View* view;
+public:
+
+	ReceiptsCommand(ReceiptService* receiptService)
+	{
+		this->receiptService = receiptService;
+		name = "receipts";
+		description = "*receipts - show all the receipts in the db";
+		admin = true;
+
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		view = new ReceiptView(user, receiptService->getAll());
+		view->display();
+	}
+};
+
+
+// engine/console/commands/admin/UpdateCarCommand.h
+﻿#pragma once
+#include <iostream>
+#include "../Command.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+
+using namespace std;
+
+class UpdateCarCommand : public Command
+{
+	CarService* carService;
+public:
+
+	UpdateCarCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "updatecar";
+		description = "*updatecar {id} {COLOR, BRAND, MAX_SPEED, PRICE, ELECTRIC, YEAR} {value}- update car by id";
+		admin = true;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		int id = stoi(args.at(1));
+		CarProperties prop = Utils::parseStringToCarProperties(args.at(2));
+
+		if (carService->updateCarByIdWithParam(id, prop, args.at(3)))
+		{
+			cout << "Car successfully updated" << endl;
+		}
+		else
+		{
+			cout << "Error, no such car" << endl;
+		}
+
+
+	}
+};
+
+
+// engine/console/commands/admin/UsersCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+
+#include "../Command.h"
+#include "../../../utils/Utils.h"
+#include "../../../entities/User.h"
+#include "../../../services/UserService.h"
+#include "../../views/ReceiptView.h"
+#include "../../views/UsersView.h"
+#include "../../views/View.h"
+
+using namespace std;
+
+class UsersCommand : public Command
+{
+private:
+	UserService* userService;
+	View* view;
+public:
+
+	UsersCommand(UserService* userService)
+	{
+		this->userService = userService;
+		name = "users";
+		description = "*users - show all the users in the db";
+		admin = true;
+
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		view = new UsersView(user, userService->getAll());
+		view->display();
+	}
+};
+
+
+// engine/console/commands/base/AllCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+
+#include "../Command.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+#include "../../views/ProductsView.h"
+#include "../../views/View.h"
+
+using namespace std;
+
+class AllCommand : public Command
+{
+private:
+	CarService* carService;
+	View* view;
+public:
+
+	AllCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "all";
+		description = "all - show all the cars sorted by id";
+		admin = false;
+
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		view = new ProductsView(user, carService->getAll());
+		view->display();
+	}
+};
+
+
+// engine/console/commands/base/BalanceCommand.h
+﻿#pragma once
+#include <iostream>
+#include "../Command.h"
+#include "../../../entities/User.h"
+
+using namespace std;
+
+class BalanceCommand : public Command
+{
+public:
+
+	BalanceCommand()
+	{
+		name = "balance";
+		description = "balance - to view your balance";
+		admin = false;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		cout << "Balance: $" << user->getBalance() << "." << endl;
+		//Dellete car
+
+	}
+};
+
+
+// engine/console/commands/base/BuyCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+
+#include "../Command.h"
+#include "../../../utils/Utils.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+#include "../../../services/ReceiptService.h"
+#include "../../views/ProductsView.h"
+#include "../../views/View.h"
+
+using namespace std;
+
+class BuyCommand : public Command
+{
+private:
+	CarService* carService;
+	ReceiptService* receiptService;
+	View* view;
+public:
+
+	BuyCommand(CarService* carService, ReceiptService* receiptService)
+	{
+		this->carService = carService;
+		this->receiptService = receiptService;
+		name = "buy";
+		description = "buy {id} - buy a car";
+		admin = false;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		int id = stoi(args.at(1));
+		Car* car = carService->findCarById(id);
+		if (user->getBalance() > car->getPrice())
+		{
+			//Money management 
+			user->setBalance(user->getBalance() - car->getPrice());
+			user->setSpent(user->getSpent() + car->getPrice());
+
+			//Create receipt
+			receiptService->createAndSave(user->getId(), car->getId(), car->getBaseCost(), car->getPrice());
+			cout << "Car successfully ordered, manager will contact you soon!" << endl;
+		}
+		else
+		{
+			cout << "You have not enough money on your balance" << endl;
+		}
+
+	}
+};
+
+
+// engine/console/commands/base/ChangePassComand.h
+﻿#pragma once
+#include <iostream>
+#include "../Command.h"
+#include "../../../entities/User.h"
+
+using namespace std;
+
+class ChangePassCommand : public Command
+{
+private:
+	UserService* userService;
+public:
+
+	ChangePassCommand(UserService* userService)
+	{
+		this->userService = userService;
+		name = "changepass";
+		description = "changepass {old pass} {new pass} - to  change your pass";
+		admin = false;
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		if (args.at(1) == user->getPassword())
+		{
+			user->setPassword(args.at(2));
+			userService->updateById(user->getId(), user);
+			cout << "Password successfully changed" << endl;
+		}
+		else
+		{
+			cout << "Wrong password" << endl;
+		}
+	}
+};
+
+
+// engine/console/commands/base/FilterCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+
+#include "../Command.h"
+#include "../../../utils/Utils.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+
+using namespace std;
+
+class FilterCommand : public Command
+{
+private:
+	CarService* carService;
+	View* view;
+public:
+
+	FilterCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "filter";
+		description = "filter {COLOR, BRAND, MAX_SPEED, PRICE, ELECTRIC, YEAR} {param/floor} [cellar] - filter cars by type";
+		admin = false;
+
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+		if (args.size() == 4)
+		{
+			CarProperties prop = Utils::parseStringToCarProperties(args.at(1));
+			vector<Car*> cars = carService->filter(prop, stoi(args.at(2)), stoi(args.at(3)));
+			view = new ProductsView(user, cars);
+		}
+
+		if (args.size() == 3)
+		{
+			CarProperties prop = Utils::parseStringToCarProperties(args.at(1));
+			vector<Car*> cars = carService->filter(prop, args.at(2));
+			view = new ProductsView(user, cars);
+		}
+
+		view->display();
+	}
+};
+
+
+// engine/console/commands/base/SortCommand.h
+﻿#pragma once
+#include <iostream>
+#include <map>
+
+#include "../Command.h"
+#include "../../../utils/Utils.h"
+#include "../../../entities/User.h"
+#include "../../../services/CarService.h"
+#include "../../views/ProductsView.h"
+#include "../../views/View.h"
+
+using namespace std;
+
+class SortCommand : public Command
+{
+private:
+	CarService* carService;
+	View* view;
+public:
+
+	SortCommand(CarService* carService)
+	{
+		this->carService = carService;
+		name = "sort";
+		description = "sort {COLOR, BRAND, MAX_SPEED, PRICE, ELECTRIC, YEAR} {ASC, DESC} - sort cars by type in specific order";
+		admin = false;
+
+	}
+
+	void execute(vector<string> args, User* user) override
+	{
+
+		CarProperties prop = Utils::parseStringToCarProperties(args.at(1));
+		Order order = Utils::parseStringToOrder(args.at(2));
+		vector<Car*> cars = carService->sort(prop, order);
+		view = new ProductsView(user, cars);
+
+
+		view->display();
+	}
+};
+
+
+// engine/console/commands/Command.h
+﻿#pragma once
+#include <string>
+#include <vector>
+using namespace std;
+class Command
+{
+
+protected:
+	string name;
+	string description;
+	bool admin;
+
+	virtual ~Command() = default;
+
+
+public:
+
+	virtual void execute(vector<string> args, User* user) = 0;
+
+	string getName()
+	{
+		return name;
+	}
+
+	string getDescription()
+	{
+		return description;
+	}
+
+	bool isAdmin()
+	{
+		return admin;
+	}
+};
+
+
+// engine/console/commands/CommandsBuilder.h
+﻿#pragma once
+#include "Command.h"
+#include "admin/CreateCarCommand.h"
+#include "admin/DeleteCarCommand.h"
+#include "admin/ReceiptsCommand.h"
+#include "admin/UpdateCarCommand.h"
+#include "admin/UsersCommand.h"
+#include "base/AllCommand.h"
+#include "base/BalanceCommand.h"
+#include "base/BuyCommand.h"
+#include "base/ChangePassComand.h"
+#include "base/FilterCommand.h"
+#include "base/SortCommand.h"
+
+class CommandsBuilder
+{
+private:
+	UserService* us;
+	CarService* cs;
+	ReceiptService* rs;
+public:
+
+
+	CommandsBuilder(UserService* us, CarService* cs, ReceiptService* rs)
+		: us(us), cs(cs), rs(rs)
+	{
+	}
+
+	vector<Command*> build()
+	{
+		vector<Command*> commands;
+		//Regular commands
+		commands.push_back(new BalanceCommand());
+		commands.push_back(new ChangePassCommand(us));
+		commands.push_back(new FilterCommand(cs));
+		commands.push_back(new SortCommand(cs));
+		commands.push_back(new AllCommand(cs));
+		commands.push_back(new BuyCommand(cs, rs));
+
+		//Admin commands
+		commands.push_back(new CreateCarCommand(cs));
+		commands.push_back(new DeleteCarCommand(cs));
+		commands.push_back(new UpdateCarCommand(cs));
+		commands.push_back(new ReceiptsCommand(rs));
+		commands.push_back(new UsersCommand(us));
+		return commands;
+	};
+
+
+};
+
+
+// engine/console/ConsoleAuth.h
+﻿#pragma once
+#include <iostream>
+
+#include "../services/UserService.h"
+
+using namespace std;
+
+class ConsoleAuth
+{
+	UserService* userService;
+
+
+public:
+	ConsoleAuth(UserService* userService)
+		: userService(userService)
+	{
+	}
+
+	User* start()
+	{
+		while (true)
+		{
+			cout << "Welcome to the car shop, please login or register" << endl;
+			cout << "Type 'login' or 'register' to proceed" << endl;
+			cout << "Type 'exit' to exit" << endl;
+
+			string cmd;
+			cin >> cmd;
+
+			//Local cmd system
+			if (cmd.compare("login") == 0)
+			{
+				User* user = login();
+				if (user != nullptr)
+				{
+					return user;
+				}
+			}
+
+			if (cmd.compare("register") == 0)
+			{
+				User* user = registration();
+				if (user != nullptr)
+				{
+					return user;
+				}
+			}
+
+			if (cmd.compare("exit") == 0)
+			{
+				return EXIT_SUCCESS;
+			}
+		}
+	}
+
+	User* login()
+	{
+		string username;
+		string password;
+
+		cout << "Type you username: " << endl;
+		cin >> username;
+
+		cout << "Type you password: " << endl;
+		cin >> password;
+
+		User* user = userService->login(username, password);
+		if (user != nullptr)
+		{
+			return user;
+		}
+
+		cout << "Email or password was incorrect" << endl;
+		return nullptr;
+	}
+
+	User* registration()
+	{
+		string username;
+		string password;
+		string rpassword;
+
+		cout << "Type you username: " << endl;
+		cin >> username;
+
+		cout << "Type your password: " << endl;
+		cin >> password;
+
+		cout << "Repeat your password: " << endl;
+		cin >> rpassword;
+
+		User* user = userService->registration(username, password, rpassword);
+		if (user != nullptr)
+		{
+			return user;
+		}
+		else
+		{
+			cout << "Bad credentials" << endl;
+			return nullptr;
+		}
+	}
+};
+
+
+// engine/console/views/HelpView.h
+﻿#pragma once
+#include <iostream>
+
+#include "View.h"
+#include "../../entities/User.h"
+
+using namespace std;
+
+class HelpView : public View
+{
+
+public:
+
+	HelpView(User* user)
+		: View(user)
+	{
+	}
+
+	void display() override
+	{
+		cout << "Type 'help' to view commands" << endl;
+		cout << "Type 'logout' to logout" << endl;
+		cout << "Type 'exit' to exit" << endl;
+	}
+};
+
+
+// engine/console/views/ProductsView.h
+﻿#pragma once
+#include <iomanip>
+#include <iostream>
+
+#include "HelpView.h"
+#include "View.h"
+#include "../../entities/User.h"
+#include "../../services/CarService.h"
+
+using namespace std;
+
+//View to view products
+class ProductsView : public View
+{
+
+private:
+	vector<Car*> cars;
+	HelpView* view;
+public:
+	ProductsView(User* user, vector<Car*> cars)
+		: View(user)
+	{
+		this->cars = cars;
+		view = new HelpView(user);
+	}
+
+	void display() override
+	{
+		system("CLS");
+
+		//Using printf instead of cout to make it shorter 
+		printf("|%+10s|%+10s|%+10s|%+10s|%+10s|%+10s|%+10s|%+10s|\n",
+			"Id", "Brand", "Model", "Year", "Color", "Engine", "Max Speed", "Price");
+		cout << string(90, '-') << endl;
+
+		for (auto car : cars)
+		{
+			string engine = car->getElectric() ? "Electric" : "Gasoline";
+
+			cout << "|" << setw(10) << std::right << car->getId();
+			cout << "|" << setw(10) << std::right << car->getBrand();
+			cout << "|" << setw(10) << std::right << car->getModel();
+			cout << "|" << setw(10) << std::right << car->getManufactureYear();
+			cout << "|" << setw(10) << std::right << car->getColor();
+			cout << "|" << setw(10) << std::right << engine;
+			cout << "|" << setw(10) << std::right << car->getMaxSpeed();
+			cout << "|" << setw(10) << std::right << car->getPrice();
+			cout << "|" << endl;
+		}
+		cout << endl;
+		view->display();
+	};
+};
+
+
+// engine/console/views/ReceiptView.h
+﻿#pragma once
+#include <iomanip>
+#include <iostream>
+
+#include "HelpView.h"
+#include "View.h"
+#include "../../entities/Receipt.h"
+#include "../../entities/User.h"
+
+using namespace std;
+
+//View to view products
+class ReceiptView : public View
+{
+
+private:
+	vector<Receipt*> receipts;
+	HelpView* view;
+public:
+
+
+	ReceiptView(User* user, const vector<Receipt*>& receipts)
+		: View(user)
+	{
+		this->receipts = receipts;
+		view = new HelpView(user);
+	}
+
+	void display() override
+	{
+		system("CLS");
+
+		//Using printf instead of cout to make it shorter 
+		printf("|%+10s|%+10s|%+10s|%+10s|%+10s|\n",
+			"Id", "UserId", "CarId", "Price", "Profit");
+		cout << string(55, '-') << endl;
+
+		for (auto receipt : receipts)
+		{
+			cout << "|" << setw(10) << std::right << receipt->getId();
+			cout << "|" << setw(10) << std::right << receipt->getUserId();
+			cout << "|" << setw(10) << std::right << receipt->getCarId();
+			cout << "|" << setw(10) << std::right << receipt->getPrice();
+			cout << "|" << setw(10) << std::right << receipt->getProfit();
+			cout << "|" << endl;
+		}
+		cout << endl;
+		view->display();
+	};
+};
+
+
+// engine/console/views/UsersView.h
+﻿#pragma once
+#include <iomanip>
+#include <iostream>
+
+#include "HelpView.h"
+#include "View.h"
+#include "../../entities/Receipt.h"
+#include "../../entities/User.h"
+
+using namespace std;
+
+//View to view products
+class UsersView : public View
+{
+
+private:
+	vector<User*> users;
+	HelpView* view;
+public:
+
+
+	UsersView(User* user, vector<User*> users)
+		: View(user)
+	{
+		this->users = users;
+		view = new HelpView(user);
+	}
+
+	void display() override
+	{
+		system("CLS");
+
+		//Using printf instead of cout to make it shorter 
+		printf("|%+10s|%+10s|%+10s|%+10s|%+10s|\n",
+			"Id", "Username", "Balance", "Spent", "Role");
+		cout << string(55, '-') << endl;
+
+		for (auto user : users)
+		{
+			string role = user->isAdmin() ? "Admin" : "User";
+
+			cout << "|" << setw(10) << std::right << user->getId();
+			cout << "|" << setw(10) << std::right << user->getUsername();
+			cout << "|" << setw(10) << std::right << user->getBalance();
+			cout << "|" << setw(10) << std::right << user->getSpent();
+			cout << "|" << setw(10) << std::right << role;
+			cout << "|" << endl;
+		}
+		cout << endl;
+		view->display();
+	};
+};
+
+
+// engine/console/views/View.h
+﻿#pragma once
+class View
+{
+protected:
+	User* user;
+
+
+	View(User* user)
+		: user(user)
+	{
+	}
+
+public:
+
+	virtual void display() = 0;
+};
+
+
+// engine/console/views/WelcomeView.h
+﻿#pragma once
+#include <iostream>
+
+#include "View.h"
+#include "../../entities/User.h"
+
+using namespace std;
+
+class WelcomeView : public View
+{
+
+public:
+
+	explicit WelcomeView(User* user)
+		: View(user)
+	{
+	}
+
+	void display() override
+	{
+		cout << "<<-- Welcome to the car shop, " + user->getUsername() + "! -->>" << endl;
+		cout << "Type 'help' to view commands" << endl;
+		cout << "Type 'logout' to logout" << endl;
+		cout << "Type 'exit' to exit" << endl;
+		if (user->isAdmin() == true)
+		{
+			cout << "It looks like your are administrator, you can now see admin commands in 'help', they are marked with star *" << endl;
+		}
+	}
+};
+
+
+// engine/entities/Car.h
+﻿#pragma once
+#include <ostream>
+#include <string>
+
+#include "../abstract/Serializable.h"
+
+using namespace std;
+
+
+class Car : public Serializable
+{
+private:
+	static int counter;
+
+	int id;
+	string brand;
+	string model;
+	int manufactureYear;
+	string color;
+	bool isElectric;
+	int maxSpeed;
+	double baseCost;
+	double price;
+
+public:
+	Car(const string& brand, const string& model, int manufacture_year, const string& color, bool is_electric,
+		int max_speed,
+		double base_cost, double price)
+		:
+		brand(brand),
+		model(model),
+		manufactureYear(manufacture_year),
+		isElectric(is_electric),
+		color(color),
+		maxSpeed(max_speed),
+		baseCost(base_cost),
+		price(price)
+	{
+		id = counter;
+		counter++;
+	}
+
+
+	Car() = default;
+
+	void serialize(std::ostream& os) override
+	{
+		string type = typeid(*this).name();
+		type.erase(0, type.find(" ") + 1);
+		os << type << " " << this->toString() << endl;
+	}
+
+
+	void deserialize(std::istream& is) override
+	{
+		is >> id;
+		counter = id + 1;
+
+		is >> brand;
+		is >> model;
+		is >> manufactureYear;
+		is >> color;
+		is >> isElectric;
+		is >> maxSpeed;
+		is >> baseCost;
+		is >> price;
+	}
+
+	string toString()
+	{
+		string tmp;
+		tmp = tmp.append(to_string(this->id)).append(" ")
+			.append(this->brand).append(" ")
+			.append(this->model).append(" ")
+			.append(to_string(this->manufactureYear)).append(" ")
+			.append(color).append(" ")
+			.append(to_string(this->isElectric)).append(" ")
+			.append(to_string(this->maxSpeed)).append(" ")
+			.append(to_string(this->baseCost)).append(" ")
+			.append(to_string(this->price));
+		return tmp;
+	}
+
+
+	//Geters and setters
+	int getId() override
+	{
+		return id;
+	}
+
+	string getModel() const
+	{
+		return model;
+	}
+
+	void setModel(string model)
+	{
+		this->model = model;
+	}
+
+	string getColor() const
+	{
+		return color;
+	}
+
+	void setColor(string color)
+	{
+		this->color = color;
+	}
+
+	double getPrice() const
+	{
+		return price;
+	}
+
+	void setPrice(double price)
+	{
+		this->price = price;
+	}
+
+
+	string getBrand() const
+	{
+		return brand;
+	}
+
+	void setBrand(string brand)
+	{
+		this->brand = brand;
+	}
+
+	int getManufactureYear() const
+	{
+		return manufactureYear;
+	}
+
+	void setManufactureYear(int manufacture_year)
+	{
+		manufactureYear = manufacture_year;
+	}
+
+	bool getElectric() const
+	{
+		return isElectric;
+	}
+
+	void setElectric(bool is_electric)
+	{
+		isElectric = is_electric;
+	}
+
+	int getMaxSpeed() const
+	{
+		return maxSpeed;
+	}
+
+	void setMaxSpeed(int max_speed)
+	{
+		maxSpeed = max_speed;
+	}
+
+	double getBaseCost() const
+	{
+		return baseCost;
+	}
+
+	void setBaseCost(double base_cost)
+	{
+		baseCost = base_cost;
+	}
+};
+
+int Car::counter = 1;
+
+
+// engine/entities/Receipt.h
+﻿#pragma once
+#include <ostream>
+#include <string>
+
+#include "../abstract/Serializable.h"
+
+using namespace std;
+
+
+class Receipt : public Serializable
+{
+private:
+	static int counter;
+
+	int id;
+	int userId;
+	int carId;
+	double price;
+	double profit;
+
+public:
+
+
+	Receipt(int user_id, int car_id, double price, double profit)
+		: userId(user_id),
+		carId(car_id),
+		price(price),
+		profit(profit)
+	{
+		id = counter;
+		counter++;
+	}
+
+	Receipt() = default;
+
+	void serialize(std::ostream& os) override
+	{
+		string type = typeid(*this).name();
+		type.erase(0, type.find(" ") + 1);
+		os << type << " " << this->toString() << endl;
+	}
+
+
+	void deserialize(std::istream& is) override
+	{
+		string tmp;
+		is >> tmp;
+		id = stoi(tmp);
+		counter = id + 1;
+
+		is >> tmp;
+		userId = stoi(tmp);
+
+		is >> tmp;
+		carId = stod(tmp);
+
+		is >> tmp;
+		price = stod(tmp);
+
+		is >> tmp;
+		profit = stod(tmp);
+	}
+
+	string toString()
+	{
+		string tmp;
+		tmp = tmp.append(to_string(this->id)).append(" ")
+			.append(to_string(userId)).append(" ")
+			.append(to_string(carId)).append(" ")
+			.append(to_string(price)).append(" ")
+			.append(to_string(profit));
+
+		return tmp;
+	}
+
+
+	//Geters and setters
+
+	int getId() override
+	{
+		return id;
+	}
+
+	void setId(int id)
+	{
+		this->id = id;
+	}
+
+	int getUserId() const
+	{
+		return userId;
+	}
+
+	void setUserId(int user_id)
+	{
+		userId = user_id;
+	}
+
+	int getCarId() const
+	{
+		return carId;
+	}
+
+	void setCarId(int car_id)
+	{
+		carId = car_id;
+	}
+
+	double getPrice() const
+	{
+		return price;
+	}
+
+	void setPrice(double price)
+	{
+		this->price = price;
+	}
+
+	double getProfit() const
+	{
+		return profit;
+	}
+
+	void setProfit(double profit)
+	{
+		this->profit = profit;
+	}
+};
+
+int Receipt::counter = 1;
+
+
+// engine/entities/User.h
+﻿#pragma once
+#include <ostream>
+#include <string>
+#include <vector>
+
+
+#include "../abstract/Serializable.h"
+#include "../utils/Utils.h"
+
+using namespace std;
+
+class User : public Serializable
+{
+protected:
+	static int counter;
+
+	int id;
+	string username;
+	string password;
+
+	double balance;
+	double spent;
+
+	bool admin;
+
+
+public:
+
+	User(string username, string password, double balance, double spent, bool admin)
+		: username(username),
+		password(password),
+		balance(balance),
+		spent(spent),
+		admin(admin)
+	{
+		id = counter;
+		counter++;
+	}
+
+	User() = default;
+
+	void serialize(std::ostream& os) override
+	{
+		string type = typeid(*this).name();
+		type.erase(0, type.find(" ") + 1);
+		os << type << " " << toString() << endl;
+	}
+
+
+	void deserialize(std::istream& is) override
+	{
+		string tmp;
+		is >> tmp;
+		id = stoi(tmp);
+		counter = id + 1;
+
+		is >> username;
+		is >> password;
+
+		is >> tmp;
+		balance = stoi(tmp);
+
+		is >> tmp;
+		spent = stod(tmp);
+
+		is >> tmp;
+		admin = Utils::stringToBool(tmp);
+	}
+
+
+	string toString()
+	{
+		string tmp;
+		tmp = tmp.append(to_string(id)).append(" ")
+			.append(username).append(" ")
+			.append(password).append(" ")
+			.append(to_string(balance)).append(" ")
+			.append(to_string(spent)).append(" ")
+			.append(to_string(admin));
+		return tmp;
+	}
+
+	//Geters and Setters
+	int getId() override
+	{
+		return id;
+	}
+
+	void setId(int id)
+	{
+		this->id = id;
+	}
+
+
+	string getUsername() const
+	{
+		return username;
+	}
+
+	void setUsername(string email)
+	{
+		this->username = email;
+	}
+
+
+	string getPassword() const
+	{
+		return password;
+	}
+
+	void setPassword(string password)
+	{
+		this->password = password;
+	}
+
+
+	double getBalance() const
+	{
+		return balance;
+	}
+
+	void setBalance(double balance)
+	{
+		this->balance = balance;
+	}
+
+	double getSpent() const
+	{
+		return spent;
+	}
+
+	void setSpent(double spent)
+	{
+		this->spent = spent;
+	}
+
+
+	bool isAdmin() const
+	{
+		return admin;
+	}
+
+	void setAdmin(bool is_admin)
+	{
+		admin = is_admin;
+	}
+};
+
+int User::counter = 1;
+
+
+// engine/enums/CarProperties.h
+﻿#pragma once
+enum CarProperties
+{
+	COLOR, BRAND, ELECTRIC, MAX_SPEED, PRICE, YEAR
+};
+
+
+// engine/enums/Order.h
+﻿#pragma once
+enum Order
+{
+	ASC, DESC
+};
+
+
+// engine/exceptions/StringToBoolCastException.h
+﻿#pragma once
+#include <exception>
+
+class StringToBoolCastException : std::exception
+{
+public:
+
+	explicit StringToBoolCastException(char const* _Message)
+		: exception(_Message)
+	{
+	}
+};
+
+
+// engine/repos/CarRepository.h
+﻿#pragma once
+#include "CrudRepository.h"
+#include "../entities/Car.h"
+
+class CarRepository : public CrudRepository<Car>
+{
+public:
+	explicit CarRepository(const string& name)
+		: CrudRepository<Car>(name)
+	{
+	}
+};
+
+
+// engine/repos/CrudRepository.h
+﻿#pragma once
+#include <string>
+#include <vector>
+#include <fstream>
+
+using namespace std;
+
+template <class T>
+class CrudRepository
+{
+protected:
+	vector<T*> elements;
+	string filePath;
+	std::ofstream saveStream;
+
+public:
+
+
+	CrudRepository(string name)
+	{
+		filePath.append(name);
+		filePath.append(".txt");
+		saveStream.open(filePath, ios::app);
+
+		elements = load();
+		//static_assert(is_base_of<Serializable, T>::value);
+	}
+
+
+	~CrudRepository()
+	{
+		saveStream.close();
+	}
+
+
+	T* findById(int id)
+	{
+		for (T* element : elements)
+		{
+			if (element->getId() == id)
+			{
+				return element;
+			}
+		}
+		return nullptr;
+	}
+
+	std::vector<T*> getAll()
+	{
+		return elements;
+	}
+
+	bool deleteById(int id)
+	{
+		for (int i = 0; i < elements.size(); i++)
+		{
+			if (elements.at(i)->getId() == id)
+			{
+				elements.erase(elements.begin() + i);
+				saveAll();
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool updateById(int id, T* t)
+	{
+		for (int i = 0; i < elements.size(); i++)
+		{
+			if (elements.at(i)->getId() == id)
+			{
+				elements[i] = t;
+				saveAll();
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool save(T* element)
+	{
+		if (findById(element->getId()) != nullptr)
+		{
+			return false;
+		}
+
+		elements.push_back(element);
+		element->serialize(saveStream);
+
+		return true;
+	}
+
+	void saveAll()
+	{
+		saveStream.close();
+		saveStream.open(filePath);
+
+		for (auto element : elements)
+		{
+			element->serialize(saveStream);
+		}
+
+		saveStream.close();
+		saveStream.open(filePath, ios::app);
+	}
+
+
+	std::vector<T*> load()
+	{
+		std::vector<T*> elements;
+
+		string type;
+
+		ifstream loadStream(filePath);
+		if (loadStream.is_open())
+		{
+			while (loadStream >> type)
+			{
+				T* tmp = new T();
+				tmp->deserialize(loadStream);
+				elements.push_back(tmp);
+			}
+			loadStream.close();
+		}
+
+		return elements;
+	}
+};
+
+
+// engine/repos/ReceiptRepository.h
+﻿#pragma once
+#include "CrudRepository.h"
+#include "../entities/Receipt.h"
+
+class ReceiptRepository : public CrudRepository<Receipt>
+{
+public:
+	explicit ReceiptRepository(const string& name)
+		: CrudRepository<Receipt>(name)
+	{
+	}
+};
+
+
+// engine/repos/UserRepository.h
+﻿#pragma once
+#include "CrudRepository.h"
+#include "../entities/User.h"
+
+class UserRepository : public CrudRepository<User>
+{
+public:
+
+
+	explicit UserRepository(const string& name)
+		: CrudRepository<User>(name)
+	{
+	}
+
+	User* findByUsername(string username)
+	{
+		for (User* element : elements)
+		{
+			if (element->getUsername() == username)
+			{
+				return element;
+			}
+		}
+		return nullptr;
+	}
+};
+
+
+// engine/services/CarService.h
+﻿#pragma once
+#include "../enums/CarProperties.h"
+#include "../enums/Order.h"
+#include "../exceptions/StringToBoolCastException.h"
+#include "../repos/CarRepository.h"
+#include "../utils/Utils.h"
+
+class CarService
+{
+	CarRepository* cars;
+
+
+public:
+	CarService(CarRepository* cars)
+		: cars(cars)
+	{
+	}
+
+	vector<Car*> getAll()
+	{
+		return cars->getAll();
+	}
+
+	bool createAndSave(const string& brand, const string& model, int manufacture_year, const string& color, bool isElectric, int maxSpeed,
+		double baseCost, double price)
+	{
+		return cars->save(new Car(brand, model, manufacture_year, color, isElectric, maxSpeed, baseCost, price));
+	}
+
+	bool deleteCarById(int id)
+	{
+		return cars->deleteById(id);
+	}
+
+	void updateCarById(int id, Car* car)
+	{
+		cars->updateById(id, car);
+	}
+
+	Car* findCarById(int id)
+	{
+		return cars->findById(id);
+	}
+
+	void saveAll()
+	{
+		cars->saveAll();
+	}
+
+
+	bool updateCarByIdWithParam(int id, CarProperties prop, string value)
+	{
+		Car* car = cars->findById(id);
+		if (car != nullptr) {
+			switch (prop)
+			{
+			case PRICE:
+				car->setPrice(stod(value));
+				break;
+			case MAX_SPEED:
+				car->setMaxSpeed(stoi(value));
+				break;
+			case YEAR:
+				car->setManufactureYear(stoi(value));
+				break;
+
+			case ELECTRIC:
+				car->setElectric(Utils::stringToBool(value));
+				break;
+
+			case BRAND:
+				car->setBrand(value);
+				break;
+
+			case COLOR:
+				car->setColor(value);
+				break;
+			default:
+				break;
+			}
+
+			cars->updateById(id, car);
+			return true;
+		}
+
+		return false;
+	}
+
+
+
+	vector<Car*> sort(CarProperties prop, Order order)
+	{
+		vector<Car*> cars = getAll();
+
+		switch (prop)
+		{
+		case PRICE:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getPrice() > b->getPrice();
+				});
+			break;
+		case MAX_SPEED:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getMaxSpeed() > b->getMaxSpeed();
+				});
+			break;
+		case YEAR:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getManufactureYear() > b->getManufactureYear();
+				});
+			break;
+
+		case ELECTRIC:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getElectric() > b->getElectric();
+				});
+			break;
+
+		case BRAND:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getBrand() > b->getBrand();
+				});
+			break;
+
+		case COLOR:
+			std::sort(cars.begin(), cars.end(),
+				[](Car* a, Car* b) -> bool
+				{
+					return a->getColor() > b->getColor();
+				});
+			break;
+		default:
+			break;
+		}
+
+		if (order == DESC)
+		{
+			std::reverse(cars.begin(), cars.end());
+		}
+
+		return cars;
+
+
+	}
+
+	vector<Car*> filter(CarProperties prop, string param)
+	{
+		vector<Car*> cars = getAll();
+		vector<Car*> filtered;
+
+		if (prop == COLOR)
+		{
+			for (auto car : cars) {
+				if (Utils::toUpperCase(car->getColor()) == Utils::toUpperCase(param))
+				{
+					filtered.push_back(car);
+				}
+			}
+			return filtered;
+		}
+
+		if (prop == BRAND)
+		{
+			for (auto car : cars) {
+				if (Utils::toUpperCase(car->getBrand()) == Utils::toUpperCase(param))
+				{
+					filtered.push_back(car);
+				}
+			}
+			return filtered;
+		}
+
+		if (prop == ELECTRIC)
+		{
+			try {
+				for (auto car : cars) {
+
+					if (car->getElectric() == Utils::stringToBool(param))
+					{
+						filtered.push_back(car);
+					}
+				}
+			}
+			catch (StringToBoolCastException ex) {
+
+			}
+			return filtered;
+		}
+
+
+	}
+
+	vector<Car*> filter(CarProperties prop, int floor, int cellar)
+	{
+		vector<Car*> cars = getAll();
+		vector<Car*> filtered;
+
+		if (prop == MAX_SPEED)
+		{
+			for (auto car : cars) {
+				if (car->getMaxSpeed() >= floor && car->getMaxSpeed() <= cellar)
+				{
+					filtered.push_back(car);
+				}
+			}
+			return filtered;
+		}
+
+		if (prop == PRICE)
+		{
+			for (auto car : cars) {
+				if (car->getPrice() >= floor && car->getPrice() <= cellar)
+				{
+					filtered.push_back(car);
+				}
+			}
+			return filtered;
+		}
+
+		if (prop == YEAR)
+		{
+			for (auto car : cars) {
+				if (car->getManufactureYear() >= floor && car->getManufactureYear() <= cellar)
+				{
+					filtered.push_back(car);
+				}
+			}
+			return filtered;
+		}
+	}
+};
+
+
+// engine/services/CommandService.h
+﻿#pragma once
+#include "../console/commands/Command.h"
+#include "../console/commands/CommandsBuilder.h"
+
+class CommandService
+{
+private:
+	vector<Command*> commands;
+
+public:
+
+
+	CommandService(const vector<Command*>& commands)
+		: commands(commands)
+	{
+	}
+
+	void start(User* user)
+	{
+		while (true)
+		{
+			vector<string> args = getAndParseCommand();
+			if (args.at(0).compare("help") == 0)
+			{
+				for (auto cmd : commands)
+				{
+					if (user->isAdmin() >= cmd->isAdmin()) {
+						cout << cmd->getDescription() << endl;
+					}
+				}
+			}
+			if (args.at(0).compare("logout") == 0)
+			{
+				system("CLS");
+				break;
+			}
+
+			if (args.at(0).compare("exit") == 0)
+			{
+
+				throw exception("exit");
+			}
+
+			for (auto cmd : commands)
+			{
+				if (cmd->getName() == args.at(0))
+				{
+					if (user->isAdmin() >= cmd->isAdmin()) {
+						cmd->execute(args, user);
+						break;
+					}
+					cout << "You have no access to this command" << endl;
+				}
+			}
+			cout << endl;
+		}
+	}
+
+	vector<std::string> getAndParseCommand()
+	{
+		string command;
+		vector<std::string> parsed;
+		getline(cin, command);
+		command += " ";
+
+		while (true) {
+			parsed.push_back(command.substr(0, command.find(" ")));
+			command.erase(0, command.find(" ") + 1);
+
+			if (strcmp(&command[0], "\0") == 0 || strcmp(&command[0], " ") == 0)
+			{
+				break;
+			}
+		}
+		return parsed;
+	}
+};
+
+
+// engine/services/ReceiptService.h
+﻿#pragma once
+#include "../entities/Receipt.h"
+#include "../entities/User.h"
+#include "../repos/CrudRepository.h"
+#include "../repos/UserRepository.h"
+
+class ReceiptService
+{
+	ReceiptRepository* receipts;
+
+
+public:
+	ReceiptService(ReceiptRepository* receipts)
+	{
+		this->receipts = receipts;
+	}
+
+	void createAndSave(int userId, int carId, double baseCost, double price)
+	{
+		double profit = price - baseCost;
+		receipts->save(new Receipt(userId, carId, price, profit));
+	}
+
+	vector<Receipt*> getAll()
+	{
+		return receipts->getAll();
+	}
+
+	void saveAll()
+	{
+		receipts->saveAll();
+	}
+
+};
+
+
+// engine/services/UserService.h
+﻿#pragma once
+#include "../entities/User.h"
+#include "../repos/CrudRepository.h"
+#include "../repos/UserRepository.h"
+
+class UserService
+{
+	UserRepository* users;
+
+
+public:
+	UserService(UserRepository* users)
+	{
+		this->users = users;
+	}
+
+	User* login(string username, string password)
+	{
+		User* user = users->findByUsername(username);
+		if (user != nullptr && user->getPassword() == password)
+		{
+			return user;
+		}
+		return nullptr;
+	}
+
+
+	User* registration(string username, string password, string rpassword)
+	{
+		User* user = users->findByUsername(username);
+		if (user == nullptr && password == rpassword)
+		{
+			User* newUser = new User(username, password, 1000, 0, false);
+			users->save(newUser);
+			return newUser;
+		}
+		return nullptr;
+	}
+
+	vector<User*> getAll()
+	{
+		return users->getAll();
+	}
+
+	void SaveAll()
+	{
+		users->saveAll();
+	}
+
+	void updateById(int id, User* user)
+	{
+		users->updateById(id, user);
+	}
+
+	void saveAll()
+	{
+		users->saveAll();
+	}
+};
+
+
+// engine/utils/Utils.h
+﻿#pragma once
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "../enums/CarProperties.h"
+#include "../enums/Order.h"
+#include "../exceptions/StringToBoolCastException.h"
+
+using namespace std;
+class Utils
+{
+public:
+	//Check if the string is numeric
+	static bool isNumericString(std::string& str)
+	{
+		return std::all_of(std::begin(str), std::end(str), [](auto ch) { return isdigit(ch); });
+	}
+
+	//Parser to CarProperties enum
+	static CarProperties parseStringToCarProperties(string str)
+	{
+		str = toUpperCase(str);
+		static unordered_map<std::string, CarProperties> const table = {
+			{"COLOR", COLOR},
+			{"BRAND", BRAND},
+			{"ELECTRIC", ELECTRIC},
+			{"MAX_SPEED", MAX_SPEED},
+			{"PRICE", PRICE},
+			{"YEAR", YEAR},
+		};
+		auto it = table.find(str);
+		if (it != table.end()) {
+			return it->second;
+		}
+		return COLOR;
+	}
+
+	static Order parseStringToOrder(string str)
+	{
+		str = toUpperCase(str);
+		static unordered_map<std::string, Order> const table = {
+			{"ASC", ASC},
+			{"DESC", DESC},
+		};
+		auto it = table.find(str);
+		if (it != table.end()) {
+			return it->second;
+		}
+		return DESC;
+	}
+
+
+	static string toUpperCase(string str)
+	{
+		string up;
+		for (auto ch : str)
+		{
+			up += toupper(ch);
+		}
+		return up;
+	}
+
+	static bool stringToBool(string str)
+	{
+		str = toUpperCase(str);
+		if (str.compare("TRUE") == 0 || str.compare("1") == 0)
+		{
+			return true;
+		}
+
+		if (str.compare("FALSE") == 0 || str.compare("0") == 0)
+		{
+			return false;
+		}
+
+		throw StringToBoolCastException("String is neither true/false or 1/0");
+	}
+
+};
+
+

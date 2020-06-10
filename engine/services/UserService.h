@@ -16,15 +16,6 @@ public:
 
 	User* login(string username, string password)
 	{
-		//vector<User*> tmp = users->getAll();
-		/*for (auto element : tmp)
-		{
-			if (element->getUsername() == username && element->getPassword() == password)
-			{
-				return element;
-			}
-		}
-		return nullptr;*/
 		User* user = users->findByUsername(username);
 		if (user != nullptr && user->getPassword() == password)
 		{
@@ -46,6 +37,11 @@ public:
 		return nullptr;
 	}
 
+	vector<User*> getAll()
+	{
+		return users->getAll();
+	}
+
 	void SaveAll()
 	{
 		users->saveAll();
@@ -54,5 +50,10 @@ public:
 	void updateById(int id, User* user)
 	{
 		users->updateById(id, user);
+	}
+
+	void saveAll()
+	{
+		users->saveAll();
 	}
 };

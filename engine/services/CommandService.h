@@ -37,7 +37,8 @@ public:
 
 			if (args.at(0).compare("exit") == 0)
 			{
-				exit(0);
+
+				throw exception("exit");
 			}
 
 			for (auto cmd : commands)

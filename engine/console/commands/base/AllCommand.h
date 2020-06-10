@@ -3,7 +3,6 @@
 #include <map>
 
 #include "../Command.h"
-#include "../../../utils/Utils.h"
 #include "../../../entities/User.h"
 #include "../../../services/CarService.h"
 #include "../../views/ProductsView.h"

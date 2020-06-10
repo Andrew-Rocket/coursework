@@ -24,7 +24,7 @@ public:
 		cout << "Type 'exit' to exit" << endl;
 		if (user->isAdmin() == true)
 		{
-			cout << "It looks like your are administrator, you can now see admin commands in 'help', they marked are with star *" << endl;
+			cout << "It looks like your are administrator, you can now see admin commands in 'help', they are marked with star *" << endl;
 		}
 	}
 };

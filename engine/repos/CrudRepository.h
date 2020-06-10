@@ -3,8 +3,6 @@
 #include <vector>
 #include <fstream>
 
-#include "Repository.h"
-
 using namespace std;
 
 template <class T>
@@ -52,21 +50,21 @@ public:
 		return elements;
 	}
 
-	void deleteById(int id)
+	bool deleteById(int id)
 	{
-		int i = 0;
-		for (auto element : elements)
+		for (int i = 0; i < elements.size(); i++)
 		{
-			if (element->getId() == id)
+			if (elements.at(i)->getId() == id)
 			{
-				elements.erase(i);
-				return;
+				elements.erase(elements.begin() + i);
+				saveAll();
+				return true;
 			}
-			i++;
 		}
+		return false;
 	}
 
-	void updateById(int id, T* t)
+	bool updateById(int id, T* t)
 	{
 		for (int i = 0; i < elements.size(); i++)
 		{
@@ -74,8 +72,10 @@ public:
 			{
 				elements[i] = t;
 				saveAll();
+				return true;
 			}
 		}
+		return false;
 	}
 
 	bool save(T* element)
